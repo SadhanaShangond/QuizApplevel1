@@ -1,86 +1,74 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import QuestionContext from "../context/QuestionContext";
 
-export default function QuestionProvider({children}){
-  //Api Calling ,functions,Properties
+export default function QuestionProvider({ children }) {
+  const QUIZ_TIME = 60; // ⏳ 1 minute
 
   const [questions, setQuestions] = useState([]);
   const [activeQuestionId, setActiveQuestionId] = useState("");
+  const [timeLeft, setTimeLeft] = useState(QUIZ_TIME);
 
+  // 🔥 Process Questions (called after API fetch)
   const processQuestions = useCallback((questionAPIResponse) => {
-    setQuestions(
-      questionAPIResponse.map((question) => ({
-        ...question,
-        hasAttempted: false,
-        isAnswerCorrect: false,
-      }))
-    );
-    setActiveQuestionId(questionAPIResponse[0]._id);
-  });
+    const formattedQuestions = questionAPIResponse.map((question) => ({
+      ...question,
+      hasAttempted: false,
+      isAnswerCorrect: false,
+    }));
+
+    setQuestions(formattedQuestions);
+    setActiveQuestionId(formattedQuestions[0]?._id);
+    setTimeLeft(QUIZ_TIME); // 🔥 Reset timer when quiz starts
+  }, []);
 
   const activeQuestion = useMemo(
-    () => questions.find((question) => question._id === activeQuestionId),
-    [activeQuestionId, questions]
+    () => questions.find((q) => q._id === activeQuestionId),
+    [questions, activeQuestionId],
   );
 
   const activeQuestionNumber = useMemo(
-    () =>
-      questions.findIndex((question) => question._id === activeQuestionId) + 1,
-    [activeQuestionId, questions]
+    () => questions.findIndex((q) => q._id === activeQuestionId) + 1,
+    [questions, activeQuestionId],
   );
 
   const totalQuestions = useMemo(() => questions.length, [questions]);
 
   const updateQuestionStatus = useCallback(
     (isAnswerCorrect) => {
-      setQuestions((prevQuestions) =>
-        prevQuestions.map((question) =>
+      setQuestions((prev) =>
+        prev.map((question) =>
           question._id === activeQuestionId
             ? { ...question, hasAttempted: true, isAnswerCorrect }
-            : question
-        )
+            : question,
+        ),
       );
     },
-    [activeQuestionId]
-  ); //hasAttempted=true,isAnswerCorrect = true
-
-  useEffect(() => {
-    //this code will run after the component re render due to questions changing
-    console.log("Question state have been updated", questions);
-  }, [questions]);
-
-  //Function to update active questionId
-  // whenever we click on next button the activequestionid  should increase by 1 and if  totalquestions=activequestionid it is the last question
+    [activeQuestionId],
+  );
 
   const activeNextQuestion = useCallback(() => {
-    const currentIndex = questions.findIndex(
-      (question) => question._id === activeQuestionId
-    );
+    const currentIndex = questions.findIndex((q) => q._id === activeQuestionId);
 
     if (currentIndex !== -1 && currentIndex + 1 < questions.length) {
       setActiveQuestionId(questions[currentIndex + 1]._id);
     }
-  }, [activeQuestionId, questions]);
+  }, [questions, activeQuestionId]);
 
-//   const activeNextQuestion = useCallback(() => {
-//     const currentIndex = questions.findIndex(
-//       (question) => question._id === activeQuestionId
-//     );
-
-//     if (currentIndex !== -1 && currentIndex + 1 < questions.length) {
-//       setActiveQuestionId(questions[currentIndex + 1]._id);
-//     }
-//   }, [activeQuestionId, questions]);
-
-
-  //Function to find out no. of correct answers
   const correctAnswers = useMemo(() => {
-    const noOfCorrectAnswers = questions.filter(
-      (question) => question.isAnswerCorrect
-    ).length;
-
-    return noOfCorrectAnswers;
+    return questions.filter((q) => q.isAnswerCorrect).length;
   }, [questions]);
+
+  // 🔥 Global Countdown Timer
+  useEffect(() => {
+    if (!totalQuestions) return;
+    if (timeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, totalQuestions]);
 
   const contextValue = useMemo(
     () => ({
@@ -91,6 +79,7 @@ export default function QuestionProvider({children}){
       processQuestions,
       updateQuestionStatus,
       activeNextQuestion,
+      timeLeft, // 👈 expose timer
     }),
     [
       activeQuestion,
@@ -100,10 +89,13 @@ export default function QuestionProvider({children}){
       processQuestions,
       updateQuestionStatus,
       activeNextQuestion,
-    ]
+      timeLeft,
+    ],
   );
 
   return (
-    <QuestionContext.Provider value={contextValue}>{children}</QuestionContext.Provider>
+    <QuestionContext.Provider value={contextValue}>
+      {children}
+    </QuestionContext.Provider>
   );
 }

@@ -5,8 +5,8 @@ import ProgressBar from "./ui/ProgressBar";
 import Card from "./ui/Card";
 import clsx from "clsx";
 import useQuestionContext from "../hooks/useQuestionContext";
-import handleError  from "../utils/handleError";
-import validateAnswerAPI from "../api/validateAnswers"; // make sure this exists
+import handleError from "../utils/handleError";
+import validateAnswerAPI from "../api/validateAnswers";
 import correctCheckMark from "../assets/white-checkmark.svg";
 import incorrectCheckMark from "../assets/incorrect-cross.svg";
 import NextArrow from "../assets/chevron-left-rounded.svg";
@@ -15,117 +15,119 @@ function NextArrowIcon() {
   return <img src={NextArrow} alt="Next Question" />;
 }
 
-const QuestionScreen = ({showResultScreen}) => {
+const QuestionScreen = ({ showResultScreen }) => {
   const [loading, setLoading] = useState(false);
   const [userSelectedOption, setUserSelectedOption] = useState("");
+
   const {
     updateQuestionStatus,
     activeQuestion,
     activeQuestionNumber,
     totalQuestions,
     activeNextQuestion,
+    timeLeft,
   } = useQuestionContext();
 
-    useEffect(() => {
-      setUserSelectedOption("");
-  
-    }, [activeQuestion._id]);
+  useEffect(() => {
+    setUserSelectedOption("");
+  }, [activeQuestion?._id]);
 
+  // 🔥 Auto submit when time ends
+  useEffect(() => {
+    if (timeLeft === 0) {
+      showResultScreen();
+    }
+  }, [timeLeft, showResultScreen]);
 
-  // handle API response
   const handleResponse = useCallback(
     (responseData) => {
       const isCorrectAnswer = responseData.status === 1;
       updateQuestionStatus(isCorrectAnswer);
     },
-    [updateQuestionStatus]
+    [updateQuestionStatus],
   );
 
-  // handle option click
   const handleClick = useCallback(
     (selectedOption) => {
+      if (timeLeft === 0) return;
+
       setUserSelectedOption(selectedOption.id);
 
       validateAnswerAPI(
         activeQuestion._id,
-        selectedOption, // FIX: use selectedOption.id instead of state
+        selectedOption,
         handleResponse,
         handleError,
-        setLoading
+        setLoading,
       );
     },
-    [activeQuestion?._id, handleResponse]
+    [activeQuestion?._id, handleResponse, timeLeft],
   );
 
   const hasAttempted = Boolean(userSelectedOption);
 
   const ifFinalQuestion = useMemo(
     () => activeQuestionNumber === totalQuestions,
-    [activeQuestionNumber, totalQuestions]
+    [activeQuestionNumber, totalQuestions],
   );
 
   return (
     <section className="question-section">
       <QuizLogo />
+
+      {/* ⏳ TIMER DISPLAY */}
+      <div
+        style={{
+          textAlign: "right",
+          fontWeight: "bold",
+          color: timeLeft <= 10 ? "red" : "black",
+        }}
+      >
+        ⏳ Time Left: {timeLeft}s
+      </div>
+
       <ProgressBar />
+
       <div className="question-content">
         <Card className="question-card">
           <div className="question-number">
             {`${activeQuestionNumber}/${totalQuestions}`}
           </div>
-          <p className="question-text">{activeQuestion.question}</p>
+
+          <p className="question-text">{activeQuestion?.question}</p>
 
           <div className="question-options">
-            {activeQuestion.options.map((option) => {
+            {activeQuestion?.options.map((option) => {
               const isThisSelected = option.id === userSelectedOption;
               const isOptionCorrect =
                 isThisSelected && activeQuestion.isAnswerCorrect;
               const isOptionIncorrect =
                 isThisSelected && !activeQuestion.isAnswerCorrect;
               const isLoading = isThisSelected && loading;
+
               return (
                 <button
+                  key={activeQuestion._id + "-" + option.id}
                   className={clsx(
                     "option",
                     !hasAttempted && "not-answered",
                     isLoading && "loading",
                     isOptionCorrect && "correct-answer",
-                    isOptionIncorrect && "incorrect-answer"
+                    isOptionIncorrect && "incorrect-answer",
                   )}
-                  key={activeQuestion._id + "-" + option.id}
                   onClick={() => handleClick(option)}
-                  disabled={hasAttempted}
+                  disabled={hasAttempted || timeLeft === 0}
                 >
                   {option.value}
-
-                  {isThisSelected ? (
-                    <span>
-                      {isOptionCorrect && (
-                        <img
-                          src={correctCheckMark}
-                          alt="correct answer"
-                          className="answer-icon"
-                        />
-                      )}
-                      {isOptionIncorrect && (
-                        <img
-                          src={incorrectCheckMark}
-                          alt="incorrect answer"
-                          className="answer-icon"
-                        />
-                      )}
-                    </span>
-                  ) : (
-                    <span className="unattempted-radio" />
-                  )}
                 </button>
               );
             })}
           </div>
+
           {ifFinalQuestion ? (
             <Button
               onClick={showResultScreen}
-              disabled={!activeQuestion.hasAttempted}
+              disabled={!activeQuestion?.hasAttempted || timeLeft === 0}
               icon={<NextArrowIcon />}
               iconPosition="right"
               size="small"
@@ -134,11 +136,11 @@ const QuestionScreen = ({showResultScreen}) => {
             </Button>
           ) : (
             <Button
-              disabled={!activeQuestion.hasAttempted}
+              disabled={!activeQuestion?.hasAttempted || timeLeft === 0}
               icon={<NextArrowIcon />}
               iconPosition="right"
               size="small"
-              onClick={() => activeNextQuestion()}
+              onClick={activeNextQuestion}
             >
               Next
             </Button>
